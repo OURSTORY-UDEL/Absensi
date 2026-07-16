@@ -1115,66 +1115,63 @@
         video.srcObject = webcamStream;
         video.play();
         
-        statusText.innerText = "Menganalisa Wajah...";
+        statusText.innerText = "Bersiap mengambil foto...";
         
-        let isProcessingFrame = false;
-        let isFinished = false;
-        
-        scannerInterval = setInterval(async () => {
-          if (isProcessingFrame || isFinished) return;
-          isProcessingFrame = true;
+        // Jeda 800ms agar lensa kamera menyesuaikan eksposur cahaya, lalu jepret otomatis
+        setTimeout(async () => {
+          canvas.width = 640;
+          canvas.height = 480;
+          const ctx = canvas.getContext('2d');
+          ctx.translate(canvas.width, 0);
+          ctx.scale(-1, 1);
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
           
-          const detections = await faceapi.detectSingleFace(video)
+          deactivateWebcamStream();
+          video.classList.add('hide');
+          canvas.classList.remove('hide');
+          
+          document.getElementById('scannerProgressBar').style.width = '30%';
+          statusText.innerText = "Mendeteksi wajah pada foto...";
+          
+          // Deteksi wajah langsung pada foto yang di-freeze
+          const detections = await faceapi.detectSingleFace(canvas)
             .withFaceLandmarks()
             .withFaceDescriptor();
             
           if (detections) {
-            if (detections.detection.score > 0.8) {
-              isFinished = true;
-              deactivateWebcamStream();
+            document.getElementById('scannerProgressBar').style.width = '70%';
+            container.className = 'relative w-64 h-64 rounded-full overflow-hidden border-4 border-emerald-500 shadow-lg bg-gray-100 flex items-center justify-center transition-all duration-300';
+            overlay.className = 'absolute inset-0 border-2 border-dashed border-emerald-300 rounded-full pointer-events-none animate-pulse transition-all duration-300';
+            document.getElementById('scannerProgressBar').className = 'bg-emerald-500 h-full transition-all duration-300';
+            statusText.className = 'mt-4 text-sm font-semibold text-emerald-600 flex items-center gap-2 transition-all duration-300';
+            statusText.innerText = "Wajah terdeteksi! Menyimpan karakteristik...";
+            
+            setTimeout(() => {
+              document.getElementById('scannerProgressBar').style.width = '100%';
+              const descriptorArray = Array.from(detections.descriptor);
+              document.getElementById('regFaceDescriptor').value = JSON.stringify(descriptorArray);
+              document.getElementById('registerFaceStatus').innerText = "✅ Wajah Berhasil Dipindai";
+              statusText.innerText = "Pemindaian selesai!";
               
-              canvas.width = 640;
-              canvas.height = 480;
-              const ctx = canvas.getContext('2d');
-              ctx.translate(canvas.width, 0);
-              ctx.scale(-1, 1);
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-              ctx.setTransform(1, 0, 0, 1, 0, 0);
-              
-              video.classList.add('hide');
-              canvas.classList.remove('hide');
-              
-              container.className = 'relative w-64 h-64 rounded-full overflow-hidden border-4 border-emerald-500 shadow-lg bg-gray-100 flex items-center justify-center transition-all duration-300';
-              overlay.className = 'absolute inset-0 border-2 border-dashed border-emerald-300 rounded-full pointer-events-none animate-pulse transition-all duration-300';
-              document.getElementById('scannerProgressBar').className = 'bg-emerald-500 h-full transition-all duration-300';
-              statusText.className = 'mt-4 text-sm font-semibold text-emerald-600 flex items-center gap-2 transition-all duration-300';
-              statusText.innerText = "Wajah Terkunci, Menyimpan Karakteristik...";
-              
-              let p = 0;
-              const pInterval = setInterval(() => {
-                p += 10;
-                document.getElementById('scannerProgressBar').style.width = p + '%';
-                if (p >= 100) {
-                  clearInterval(pInterval);
-                  const descriptorArray = Array.from(detections.descriptor);
-                  document.getElementById('regFaceDescriptor').value = JSON.stringify(descriptorArray);
-                  document.getElementById('registerFaceStatus').innerText = "✅ Wajah Berhasil Dipindai";
-                  statusText.innerText = "Pemindaian selesai!";
-                  
-                  setTimeout(() => {
-                    stopWebcam();
-                    Swal.fire({ icon: 'success', title: 'Pemindaian Wajah Sukses', text: 'Ciri khas wajah Anda telah terekam. Silakan lanjutkan pendaftaran.', timer: 2000, showConfirmButton: false });
-                  }, 1000);
-                }
-              }, 40);
-            } else {
-              statusText.innerText = "Wajah kurang jelas, silakan dekatkan...";
-            }
+              setTimeout(() => {
+                stopWebcam();
+                Swal.fire({ icon: 'success', title: 'Pemindaian Wajah Sukses', text: 'Ciri khas wajah Anda telah terekam. Silakan lanjutkan pendaftaran.', timer: 2000, showConfirmButton: false });
+              }, 1000);
+            }, 600);
           } else {
-            statusText.innerText = "Posisikan wajah Anda di dalam lingkaran.";
+            container.className = 'relative w-64 h-64 rounded-full overflow-hidden border-4 border-rose-500 shadow-lg bg-gray-100 flex items-center justify-center transition-all duration-300';
+            overlay.className = 'absolute inset-0 border-2 border-dashed border-rose-300 rounded-full pointer-events-none animate-pulse transition-all duration-300';
+            document.getElementById('scannerProgressBar').className = 'bg-rose-500 h-full transition-all duration-300';
+            statusText.className = 'mt-4 text-sm font-semibold text-rose-600 flex items-center gap-2 transition-all duration-300';
+            statusText.innerText = "Wajah tidak terdeteksi pada foto!";
+            
+            setTimeout(() => {
+              stopWebcam();
+              Swal.fire({ icon: 'error', title: 'Pemindaian Gagal', text: 'Wajah tidak terdeteksi. Silakan coba lagi dengan memastikan wajah Anda terlihat jelas menghadap kamera.' });
+            }, 1500);
           }
-          isProcessingFrame = false;
-        }, 200);
+        }, 800);
         
       } catch (err) {
         stopWebcam();
@@ -1304,171 +1301,168 @@
         video.srcObject = webcamStream;
         video.play();
         
-        statusText.innerText = "Menganalisa Wajah...";
+        statusText.innerText = "Bersiap mengambil foto...";
         
-        const labeledDescriptors = employeesList.map(emp => {
-          const desc = new Float32Array(JSON.parse(emp.faceDescriptor));
-          return new faceapi.LabeledFaceDescriptors(emp.nip, [desc]);
-        });
-        const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.45); // Toleransi 0.45 (ketat & aman)
-        
-        let isProcessingFrame = false;
-        let isFinished = false;
-        
-        scannerInterval = setInterval(async () => {
-          if (isProcessingFrame || isFinished) return;
-          isProcessingFrame = true;
+        // Jeda 800ms agar lensa kamera menyesuaikan eksposur cahaya, lalu jepret otomatis
+        setTimeout(async () => {
+          canvas.width = 640;
+          canvas.height = 480;
+          const ctx = canvas.getContext('2d');
+          ctx.translate(canvas.width, 0);
+          ctx.scale(-1, 1);
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
           
-          const detections = await faceapi.detectSingleFace(video)
-            .withFaceLandmarks()
-            .withFaceDescriptor();
+          deactivateWebcamStream();
+          video.classList.add('hide');
+          canvas.classList.remove('hide');
+          
+          // Step 1: Captured (20% progress)
+          document.getElementById('scannerProgressBar').style.width = '20%';
+          statusText.innerText = "Mengambil Gambar Wajah...";
+          
+          // Step 2: Face Detection Offline (40% progress)
+          setTimeout(async () => {
+            document.getElementById('scannerProgressBar').style.width = '40%';
+            statusText.innerText = "Mendeteksi wajah pada foto...";
             
-          if (detections) {
-            // Deteksi wajah jelas (Score > 0.8)
-            if (detections.detection.score > 0.8) {
-              isFinished = true;
-              deactivateWebcamStream();
+            const detections = await faceapi.detectSingleFace(canvas)
+              .withFaceLandmarks()
+              .withFaceDescriptor();
               
-              // Simpan snapshot gambar
-              canvas.width = 640;
-              canvas.height = 480;
-              const ctx = canvas.getContext('2d');
-              ctx.translate(canvas.width, 0);
-              ctx.scale(-1, 1);
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-              ctx.setTransform(1, 0, 0, 1, 0, 0);
+            if (!detections) {
+              container.className = 'relative w-64 h-64 rounded-full overflow-hidden border-4 border-rose-500 shadow-lg bg-gray-100 flex items-center justify-center transition-all duration-300';
+              overlay.className = 'absolute inset-0 border-2 border-dashed border-rose-300 rounded-full pointer-events-none animate-pulse transition-all duration-300';
+              document.getElementById('scannerProgressBar').className = 'bg-rose-500 h-full transition-all duration-300';
+              statusText.className = 'mt-4 text-sm font-semibold text-rose-600 flex items-center gap-2 transition-all duration-300';
+              statusText.innerText = "Wajah tidak terdeteksi!";
               
-              video.classList.add('hide');
-              canvas.classList.remove('hide');
+              setTimeout(() => {
+                stopWebcam();
+                Swal.fire({ icon: 'error', title: 'Deteksi Gagal', text: 'Wajah tidak terdeteksi pada foto. Silakan ulangi dengan memastikan wajah Anda terlihat jelas.' });
+              }, 1200);
+              return;
+            }
+            
+            // Step 3: Hubungkan GPS & Cek Geofence (60% progress)
+            document.getElementById('scannerProgressBar').style.width = '60%';
+            statusText.innerText = "Verifikasi GPS & Geofence...";
+            
+            let position;
+            try {
+              position = await getGPSPosition();
+            } catch (gpsError) {
+              stopWebcam();
+              Swal.fire({ icon: 'error', title: 'Lokasi Wajib Aktif!', text: 'Absensi ditolak. Pastikan izin GPS Browser/HP Anda menyala.' });
+              return;
+            }
+            
+            // Step 4: Cocokkan Karakteristik Wajah (80% progress)
+            document.getElementById('scannerProgressBar').style.width = '80%';
+            statusText.innerText = "Mencocokkan Karakteristik Wajah...";
+            
+            const labeledDescriptors = employeesList.map(emp => {
+              const desc = new Float32Array(JSON.parse(emp.faceDescriptor));
+              return new faceapi.LabeledFaceDescriptors(emp.nip, [desc]);
+            });
+            const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.45); // Toleransi 0.45
+            
+            const match = faceMatcher.findBestMatch(detections.descriptor);
+            const base64Data = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+            
+            // Step 5: Keputusan Akhir (100% progress)
+            setTimeout(() => {
+              document.getElementById('scannerProgressBar').style.width = '100%';
               
-              // 1. Gambar berhasil diambil (Progress 20%)
-              document.getElementById('scannerProgressBar').style.width = '20%';
-              statusText.innerText = "Mengambil Gambar Wajah...";
-              
-              // 2. Hubungkan GPS & Cek Geofence (Progress 50%)
-              setTimeout(async () => {
-                document.getElementById('scannerProgressBar').style.width = '50%';
-                statusText.innerText = "Verifikasi GPS & Geofence...";
+              if (match.label !== 'unknown') {
+                // Wajah Cocok!
+                container.className = 'relative w-64 h-64 rounded-full overflow-hidden border-4 border-emerald-500 shadow-lg bg-gray-100 flex items-center justify-center transition-all duration-300';
+                overlay.className = 'absolute inset-0 border-2 border-dashed border-emerald-300 rounded-full pointer-events-none animate-pulse transition-all duration-300';
+                document.getElementById('scannerProgressBar').className = 'bg-emerald-500 h-full transition-all duration-300';
+                statusText.className = 'mt-4 text-sm font-semibold text-emerald-600 flex items-center gap-2 transition-all duration-300';
+                statusText.innerText = "Wajah Cocok, Absen Sedang Dilakukan";
                 
-                let position;
-                try {
-                  position = await getGPSPosition();
-                } catch (gpsError) {
-                  stopWebcam();
-                  Swal.fire({ icon: 'error', title: 'Lokasi Wajib Aktif!', text: 'Absensi ditolak. Pastikan izin GPS Browser/HP Anda menyala.' });
-                  return;
+                const matchedEmp = employeesList.find(emp => emp.nip === match.label);
+                
+                // Cek jarak radius kantor lokal
+                let outOfRadius = false;
+                let distanceText = "";
+                let maxRadius = 50;
+                
+                if (appGlobalConfig && appGlobalConfig.geoAktif) {
+                  const distance = getDistanceFromLatLonInM(
+                    position.coords.latitude,
+                    position.coords.longitude,
+                    appGlobalConfig.geoLat,
+                    appGlobalConfig.geoLng
+                  );
+                  maxRadius = appGlobalConfig.geoRadius || 50;
+                  if (distance > maxRadius) {
+                    outOfRadius = true;
+                    distanceText = `Anda berada di luar area kantor. Jarak Anda: ${Math.round(distance)} m (Maksimal: ${maxRadius} m).`;
+                  }
                 }
                 
-                // 3. Cocokkan Karakteristik Wajah (Progress 80%)
                 setTimeout(() => {
-                  document.getElementById('scannerProgressBar').style.width = '80%';
-                  statusText.innerText = "Mencocokkan Karakteristik Wajah...";
+                  stopWebcam();
                   
-                  const match = faceMatcher.findBestMatch(detections.descriptor);
-                  const base64Data = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
-                  
-                  // 4. Keputusan Akhir (Progress 100%)
-                  setTimeout(() => {
-                    document.getElementById('scannerProgressBar').style.width = '100%';
-                    
-                    if (match.label !== 'unknown') {
-                      // Wajah Cocok!
-                      container.className = 'relative w-64 h-64 rounded-full overflow-hidden border-4 border-emerald-500 shadow-lg bg-gray-100 flex items-center justify-center transition-all duration-300';
-                      overlay.className = 'absolute inset-0 border-2 border-dashed border-emerald-300 rounded-full pointer-events-none animate-pulse transition-all duration-300';
-                      document.getElementById('scannerProgressBar').className = 'bg-emerald-500 h-full transition-all duration-300';
-                      statusText.className = 'mt-4 text-sm font-semibold text-emerald-600 flex items-center gap-2 transition-all duration-300';
-                      statusText.innerText = "Wajah Cocok, Absen Sedang Dilakukan";
-                      
-                      const matchedEmp = employeesList.find(emp => emp.nip === match.label);
-                      
-                      // Cek jarak radius kantor lokal
-                      let outOfRadius = false;
-                      let distanceText = "";
-                      let maxRadius = 50;
-                      
-                      if (appGlobalConfig && appGlobalConfig.geoAktif) {
-                        const distance = getDistanceFromLatLonInM(
-                          position.coords.latitude,
-                          position.coords.longitude,
-                          appGlobalConfig.geoLat,
-                          appGlobalConfig.geoLng
-                        );
-                        maxRadius = appGlobalConfig.geoRadius || 50;
-                        if (distance > maxRadius) {
-                          outOfRadius = true;
-                          distanceText = `Anda berada di luar area kantor. Jarak Anda: ${Math.round(distance)} m (Maksimal: ${maxRadius} m).`;
-                        }
-                      }
-                      
-                      setTimeout(() => {
-                        stopWebcam();
-                        
-                        if (outOfRadius) {
-                          Swal.fire({
-                            title: '📍 Luar Area Kantor',
-                            html: `${distanceText}<br>Apakah Anda ingin melanjutkan dengan alasan?`,
-                            icon: 'warning',
-                            showCancelButton: true,
-                            confirmButtonColor: '#059669',
-                            cancelButtonColor: '#6b7280',
-                            confirmButtonText: 'Ya, Lanjutkan',
-                            cancelButtonText: 'Batal'
-                          }).then((result) => {
-                            if (result.isConfirmed) {
-                              Swal.fire({
-                                title: 'Masukkan Alasan',
-                                input: 'text',
-                                inputLabel: 'Contoh: WFH, Dinas Luar, Meeting',
-                                inputPlaceholder: 'Ketik alasan Anda di sini...',
-                                showCancelButton: true,
-                                confirmButtonColor: '#059669',
-                                cancelButtonColor: '#6b7280',
-                                confirmButtonText: 'Kirim Alasan',
-                                cancelButtonText: 'Batal',
-                                inputValidator: (value) => {
-                                  if (!value) {
-                                    return 'Alasan wajib diisi!';
-                                  }
-                                }
-                              }).then((reasonResult) => {
-                                if (reasonResult.isConfirmed) {
-                                  Swal.fire({ title: 'Mengirim Absensi...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
-                                  kirimDataAbsen(matchedEmp.nip, matchedEmp.nama, base64Data, position.coords.latitude, position.coords.longitude, reasonResult.value);
-                                }
-                              });
+                  if (outOfRadius) {
+                    Swal.fire({
+                      title: '📍 Luar Area Kantor',
+                      html: `${distanceText}<br>Apakah Anda ingin melanjutkan dengan alasan?`,
+                      icon: 'warning',
+                      showCancelButton: true,
+                      confirmButtonColor: '#059669',
+                      cancelButtonColor: '#6b7280',
+                      confirmButtonText: 'Ya, Lanjutkan',
+                      cancelButtonText: 'Batal'
+                    }).then((result) => {
+                      if (result.isConfirmed) {
+                        Swal.fire({
+                          title: 'Masukkan Alasan',
+                          input: 'text',
+                          inputLabel: 'Contoh: WFH, Dinas Luar, Meeting',
+                          inputPlaceholder: 'Ketik alasan Anda di sini...',
+                          showCancelButton: true,
+                          confirmButtonColor: '#059669',
+                          cancelButtonColor: '#6b7280',
+                          confirmButtonText: 'Kirim Alasan',
+                          cancelButtonText: 'Batal',
+                          inputValidator: (value) => {
+                            if (!value) {
+                              return 'Alasan wajib diisi!';
                             }
-                          });
-                        } else {
-                          Swal.fire({ title: 'Mengirim Absensi...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
-                          kirimDataAbsen(matchedEmp.nip, matchedEmp.nama, base64Data, position.coords.latitude, position.coords.longitude, "");
-                        }
-                      }, 1000);
-                      
-                    } else {
-                      // Penyusup (Unknown)!
-                      container.className = 'relative w-64 h-64 rounded-full overflow-hidden border-4 border-rose-500 shadow-lg bg-gray-100 flex items-center justify-center transition-all duration-300';
-                      overlay.className = 'absolute inset-0 border-2 border-dashed border-rose-300 rounded-full pointer-events-none animate-pulse transition-all duration-300';
-                      document.getElementById('scannerProgressBar').className = 'bg-rose-500 h-full transition-all duration-300';
-                      statusText.className = 'mt-4 text-sm font-semibold text-rose-600 flex items-center gap-2 transition-all duration-300';
-                      statusText.innerText = "Siapa Nih? Penyusup!!!";
-                      
-                      setTimeout(() => {
-                        stopWebcam();
-                        Swal.fire({ icon: 'error', title: 'Akses Ditolak', text: 'Wajah Anda tidak terdaftar dalam sistem!' });
-                      }, 1200);
-                    }
-                  }, 400);
-                }, 400);
-              }, 400);
-              
-            } else {
-              statusText.innerText = "Wajah kurang jelas, silakan dekatkan...";
-            }
-          } else {
-            statusText.innerText = "Posisikan wajah Anda di dalam lingkaran.";
-          }
-          isProcessingFrame = false;
-        }, 200);
+                          }
+                        }).then((reasonResult) => {
+                          if (reasonResult.isConfirmed) {
+                            Swal.fire({ title: 'Mengirim Absensi...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+                            kirimDataAbsen(matchedEmp.nip, matchedEmp.nama, base64Data, position.coords.latitude, position.coords.longitude, reasonResult.value);
+                          }
+                        });
+                      }
+                    });
+                  } else {
+                    Swal.fire({ title: 'Mengirim Absensi...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+                    kirimDataAbsen(matchedEmp.nip, matchedEmp.nama, base64Data, position.coords.latitude, position.coords.longitude, "");
+                  }
+                }, 1000);
+                
+              } else {
+                // Penyusup (Unknown)!
+                container.className = 'relative w-64 h-64 rounded-full overflow-hidden border-4 border-rose-500 shadow-lg bg-gray-100 flex items-center justify-center transition-all duration-300';
+                overlay.className = 'absolute inset-0 border-2 border-dashed border-rose-300 rounded-full pointer-events-none animate-pulse transition-all duration-300';
+                document.getElementById('scannerProgressBar').className = 'bg-rose-500 h-full transition-all duration-300';
+                statusText.className = 'mt-4 text-sm font-semibold text-rose-600 flex items-center gap-2 transition-all duration-300';
+                statusText.innerText = "Siapa Nih? Penyusup!!!";
+                
+                setTimeout(() => {
+                  stopWebcam();
+                  Swal.fire({ icon: 'error', title: 'Akses Ditolak', text: 'Wajah Anda tidak terdaftar dalam sistem!' });
+                }, 1200);
+              }
+            }, 400);
+          }, 300);
+        }, 800);
         
       } catch (err) {
         stopWebcam();
