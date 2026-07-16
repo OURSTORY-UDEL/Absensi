@@ -560,13 +560,18 @@
       <h3 id="webcamModalTitle" class="text-lg font-bold text-gray-900 mb-2">Scan Wajah Kehadiran</h3>
       <p class="text-xs text-gray-500 text-center mb-4">Posisikan wajah Anda di dalam lingkaran</p>
       
-      <div class="relative w-64 h-64 rounded-full overflow-hidden border-4 border-emerald-500 shadow-lg bg-gray-100 flex items-center justify-center">
+      <div id="webcamContainer" class="relative w-64 h-64 rounded-full overflow-hidden border-4 border-rose-500 shadow-lg bg-gray-100 flex items-center justify-center transition-all duration-300">
         <video id="webcam" autoplay playsinline muted class="w-full h-full object-cover scale-x-[-1]"></video>
-        <div id="scannerOverlay" class="absolute inset-0 border-2 border-dashed border-emerald-300 rounded-full pointer-events-none animate-pulse"></div>
+        <div id="scannerOverlay" class="absolute inset-0 border-2 border-dashed border-rose-300 rounded-full pointer-events-none animate-pulse transition-all duration-300"></div>
         <canvas id="tempCanvas" class="hide"></canvas>
       </div>
       
-      <div id="scannerStatusText" class="mt-4 text-sm font-semibold text-emerald-600 flex items-center gap-2">
+      <!-- Progress Bar Indikator Pemindaian -->
+      <div class="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden mt-5 relative">
+        <div id="scannerProgressBar" class="bg-rose-500 h-full w-0 transition-all duration-300"></div>
+      </div>
+      
+      <div id="scannerStatusText" class="mt-4 text-sm font-semibold text-rose-600 flex items-center gap-2 transition-all duration-300">
         <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Inisialisasi AI Wajah...
       </div>
       
@@ -1089,6 +1094,14 @@
       modal.classList.remove('hide');
       lucide.createIcons();
 
+      document.getElementById('scannerProgressBar').style.width = '0%';
+      document.getElementById('scannerProgressBar').className = 'bg-rose-500 h-full w-0 transition-all duration-300';
+      const container = document.getElementById('webcamContainer');
+      const overlay = document.getElementById('scannerOverlay');
+      container.className = 'relative w-64 h-64 rounded-full overflow-hidden border-4 border-rose-500 shadow-lg bg-gray-100 flex items-center justify-center transition-all duration-300';
+      overlay.className = 'absolute inset-0 border-2 border-dashed border-rose-300 rounded-full pointer-events-none animate-pulse transition-all duration-300';
+      statusText.className = 'mt-4 text-sm font-semibold text-rose-600 flex items-center gap-2 transition-all duration-300';
+
       try {
         await loadFaceApiModels();
         webcamStream = await navigator.mediaDevices.getUserMedia({
@@ -1100,23 +1113,46 @@
         
         statusText.innerText = "Harap menghadap kamera...";
         
+        let calibrationCount = 0;
         scannerInterval = setInterval(async () => {
           const detections = await faceapi.detectSingleFace(video)
             .withFaceLandmarks()
             .withFaceDescriptor();
             
           if (detections) {
-            clearInterval(scannerInterval);
-            const descriptorArray = Array.from(detections.descriptor);
-            document.getElementById('regFaceDescriptor').value = JSON.stringify(descriptorArray);
-            document.getElementById('registerFaceStatus').innerText = "✅ Wajah Berhasil Dipindai";
-            statusText.innerText = "Wajah terdeteksi! Menutup kamera...";
-            setTimeout(() => {
-              stopWebcam();
-              Swal.fire({ icon: 'success', title: 'Pemindaian Wajah Sukses', text: 'Ciri khas wajah Anda telah terekam. Silakan lanjutkan pendaftaran.', timer: 2000, showConfirmButton: false });
-            }, 1000);
+            calibrationCount++;
+            let progress = Math.min(calibrationCount * 33.3, 100);
+            document.getElementById('scannerProgressBar').style.width = progress + '%';
+            
+            container.className = 'relative w-64 h-64 rounded-full overflow-hidden border-4 border-emerald-500 shadow-lg bg-gray-100 flex items-center justify-center transition-all duration-300';
+            overlay.className = 'absolute inset-0 border-2 border-dashed border-emerald-300 rounded-full pointer-events-none animate-pulse transition-all duration-300';
+            document.getElementById('scannerProgressBar').className = 'bg-emerald-500 h-full transition-all duration-300';
+            statusText.className = 'mt-4 text-sm font-semibold text-emerald-600 flex items-center gap-2 transition-all duration-300';
+            
+            if (calibrationCount === 1) {
+              statusText.innerText = "Wajah terdeteksi... Harap diam & jangan bergerak!";
+            } else if (calibrationCount === 2) {
+              statusText.innerText = "Menganalisis koordinat wajah...";
+            } else if (calibrationCount >= 3) {
+              clearInterval(scannerInterval);
+              const descriptorArray = Array.from(detections.descriptor);
+              document.getElementById('regFaceDescriptor').value = JSON.stringify(descriptorArray);
+              document.getElementById('registerFaceStatus').innerText = "✅ Wajah Berhasil Dipindai";
+              statusText.innerText = "Pemindaian selesai!";
+              
+              setTimeout(() => {
+                stopWebcam();
+                Swal.fire({ icon: 'success', title: 'Pemindaian Wajah Sukses', text: 'Ciri khas wajah Anda telah terekam. Silakan lanjutkan pendaftaran.', timer: 2000, showConfirmButton: false });
+              }, 1000);
+            }
           } else {
-            statusText.innerText = "Wajah tidak terdeteksi. Silakan posisikan wajah Anda lebih dekat.";
+            calibrationCount = 0;
+            document.getElementById('scannerProgressBar').style.width = '0%';
+            document.getElementById('scannerProgressBar').className = 'bg-rose-500 h-full transition-all duration-300';
+            container.className = 'relative w-64 h-64 rounded-full overflow-hidden border-4 border-rose-500 shadow-lg bg-gray-100 flex items-center justify-center transition-all duration-300';
+            overlay.className = 'absolute inset-0 border-2 border-dashed border-rose-300 rounded-full pointer-events-none animate-pulse transition-all duration-300';
+            statusText.className = 'mt-4 text-sm font-semibold text-rose-600 flex items-center gap-2 transition-all duration-300';
+            statusText.innerText = "Posisikan wajah Anda di tengah lingkaran.";
           }
         }, 1000);
         
@@ -1193,6 +1229,14 @@
       modal.classList.remove('hide');
       lucide.createIcons();
 
+      document.getElementById('scannerProgressBar').style.width = '0%';
+      document.getElementById('scannerProgressBar').className = 'bg-rose-500 h-full w-0 transition-all duration-300';
+      const container = document.getElementById('webcamContainer');
+      const overlay = document.getElementById('scannerOverlay');
+      container.className = 'relative w-64 h-64 rounded-full overflow-hidden border-4 border-rose-500 shadow-lg bg-gray-100 flex items-center justify-center transition-all duration-300';
+      overlay.className = 'absolute inset-0 border-2 border-dashed border-rose-300 rounded-full pointer-events-none animate-pulse transition-all duration-300';
+      statusText.className = 'mt-4 text-sm font-semibold text-rose-600 flex items-center gap-2 transition-all duration-300';
+
       try {
         await loadFaceApiModels();
         webcamStream = await navigator.mediaDevices.getUserMedia({
@@ -1210,56 +1254,84 @@
         });
         const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
         
+        let calibrationCount = 0;
         scannerInterval = setInterval(async () => {
           const detections = await faceapi.detectSingleFace(video)
             .withFaceLandmarks()
             .withFaceDescriptor();
             
           if (detections) {
-            statusText.innerText = "Menganalisis wajah...";
             const match = faceMatcher.findBestMatch(detections.descriptor);
             
             if (match.label !== 'unknown') {
-              clearInterval(scannerInterval);
+              calibrationCount++;
+              let progress = Math.min(calibrationCount * 33.3, 100);
+              document.getElementById('scannerProgressBar').style.width = progress + '%';
+              
+              container.className = 'relative w-64 h-64 rounded-full overflow-hidden border-4 border-emerald-500 shadow-lg bg-gray-100 flex items-center justify-center transition-all duration-300';
+              overlay.className = 'absolute inset-0 border-2 border-dashed border-emerald-300 rounded-full pointer-events-none animate-pulse transition-all duration-300';
+              document.getElementById('scannerProgressBar').className = 'bg-emerald-500 h-full transition-all duration-300';
+              statusText.className = 'mt-4 text-sm font-semibold text-emerald-600 flex items-center gap-2 transition-all duration-300';
+              
               const matchedEmp = employeesList.find(emp => emp.nip === match.label);
-              statusText.innerText = `Wajah cocok: ${matchedEmp.nama}!`;
               
-              const canvas = document.getElementById('tempCanvas');
-              canvas.width = 640;
-              canvas.height = 480;
-              const ctx = canvas.getContext('2d');
-              ctx.translate(canvas.width, 0);
-              ctx.scale(-1, 1);
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-              ctx.setTransform(1, 0, 0, 1, 0, 0);
-              const base64Data = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
-              
-              stopWebcam();
-              
-              Swal.fire({
-                title: 'Verifikasi Lokasi...',
-                html: `Menghubungkan GPS untuk <b>${matchedEmp.nama}</b>...`,
-                allowOutsideClick: false,
-                didOpen: () => { Swal.showLoading(); }
-              });
-              
-              if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                  (position) => {
-                    kirimDataAbsen(matchedEmp.nip, matchedEmp.nama, base64Data, position.coords.latitude, position.coords.longitude);
-                  },
-                  (error) => {
-                    Swal.fire({ icon: 'error', title: 'Lokasi Wajib Aktif!', text: 'Absensi ditolak. Pastikan izin GPS Browser/HP Anda menyala.' });
-                  },
-                  { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-                );
-              } else {
-                Swal.fire({ icon: 'error', title: 'Tidak Didukung', text: 'Browser tidak mendukung pelacakan lokasi.' });
+              if (calibrationCount === 1) {
+                statusText.innerText = `Wajah cocok: ${matchedEmp.nama}! Harap diam & jangan bergerak...`;
+              } else if (calibrationCount === 2) {
+                statusText.innerText = "Menganalisis koordinat wajah...";
+              } else if (calibrationCount >= 3) {
+                clearInterval(scannerInterval);
+                statusText.innerText = `Pemindaian selesai!`;
+                
+                const canvas = document.getElementById('tempCanvas');
+                canvas.width = 640;
+                canvas.height = 480;
+                const ctx = canvas.getContext('2d');
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                const base64Data = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+                
+                stopWebcam();
+                
+                Swal.fire({
+                  title: 'Verifikasi Lokasi...',
+                  html: `Menghubungkan GPS untuk <b>${matchedEmp.nama}</b>...`,
+                  allowOutsideClick: false,
+                  didOpen: () => { Swal.showLoading(); }
+                });
+                
+                if (navigator.geolocation) {
+                  navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                      kirimDataAbsen(matchedEmp.nip, matchedEmp.nama, base64Data, position.coords.latitude, position.coords.longitude);
+                    },
+                    (error) => {
+                      Swal.fire({ icon: 'error', title: 'Lokasi Wajib Aktif!', text: 'Absensi ditolak. Pastikan izin GPS Browser/HP Anda menyala.' });
+                    },
+                    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+                  );
+                } else {
+                  Swal.fire({ icon: 'error', title: 'Tidak Didukung', text: 'Browser tidak mendukung pelacakan lokasi.' });
+                }
               }
             } else {
+              calibrationCount = 0;
+              document.getElementById('scannerProgressBar').style.width = '0%';
+              document.getElementById('scannerProgressBar').className = 'bg-rose-500 h-full transition-all duration-300';
+              container.className = 'relative w-64 h-64 rounded-full overflow-hidden border-4 border-rose-500 shadow-lg bg-gray-100 flex items-center justify-center transition-all duration-300';
+              overlay.className = 'absolute inset-0 border-2 border-dashed border-rose-300 rounded-full pointer-events-none animate-pulse transition-all duration-300';
+              statusText.className = 'mt-4 text-sm font-semibold text-rose-600 flex items-center gap-2 transition-all duration-300';
               statusText.innerText = "Wajah tidak dikenal. Silakan coba lagi.";
             }
           } else {
+            calibrationCount = 0;
+            document.getElementById('scannerProgressBar').style.width = '0%';
+            document.getElementById('scannerProgressBar').className = 'bg-rose-500 h-full transition-all duration-300';
+            container.className = 'relative w-64 h-64 rounded-full overflow-hidden border-4 border-rose-500 shadow-lg bg-gray-100 flex items-center justify-center transition-all duration-300';
+            overlay.className = 'absolute inset-0 border-2 border-dashed border-rose-300 rounded-full pointer-events-none animate-pulse transition-all duration-300';
+            statusText.className = 'mt-4 text-sm font-semibold text-rose-600 flex items-center gap-2 transition-all duration-300';
             statusText.innerText = "Mencari wajah...";
           }
         }, 1000);
